@@ -1,0 +1,1 @@
+echo "**** Setting up environment, need Homebrew, git, gRPC, openimagiio and math"
