@@ -1,3 +1,9 @@
+############# gRPC ################
+
+# build gRPC
+
+echo "Building gRPC..."
+
 cd grpc
 mkdir -p cmake/build
 pushd cmake/build
@@ -8,4 +14,19 @@ cmake -DgRPC_INSTALL=ON \
 make -j
 make install
 popd
+
+
+# build image server and client
+
+echo "Building Image server and client..."
+
+cmake -DCMAKE_CXX_STANDARD=14 -DCMAKE_PREFIX_PATH=$MY_INSTALL_DIR
+make -j
+
+echo "Done! Now you can run via ./server and .client... "
+echo "Ie: "
+echo "./server --host 0.0.0.0 --port 50051 "
+echo "./client --host localhost --port 50051 --rotate TWO_SEVENTY_DEG --mean true --input ./test_neura.jpeg --output ./saved.jpeg"
+
+
 

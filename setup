@@ -1,1 +1,42 @@
 echo "**** Setting up environment, need Homebrew, git, gRPC, openimagiio and math"
+
+############# setup paths ################
+#export MY_INSTALL_DIR=/usr/local/gRPC
+
+export MY_INSTALL_DIR=$HOME/Coding/gRPC
+mkdir -p $MY_INSTALL_DIR
+export PATH="$MY_INSTALL_DIR/bin:$PATH"
+
+
+############# setup the core tools ################
+
+# set up the xcode for brew 
+xcode-select --install
+
+#install brew
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# install latest git
+brew install git 
+
+#install cmake for building gRPC
+brew install cmake
+brew install autoconf automake libtool pkg-config
+
+############# fetch 3rd party libs ################
+
+brew install openimageio
+
+brew install imath
+
+
+############# gRPC ################
+
+# get repo to build later
+git clone --recurse-submodules -b v1.41.0 https://github.com/grpc/grpc
+
+
+
+
+
+

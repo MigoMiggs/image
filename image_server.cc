@@ -16,6 +16,7 @@
  *
  */
 
+
 #include <iostream>
 #include <memory>
 #include <string>
@@ -50,9 +51,11 @@ using image::NLImageRotateRequest;
 using image::NLImageRotateRequest_Rotation;
 using image::NLImageService;
 
+
+
 // Logic and data behind the server's behavior.
 class NLImageServiceImpl final : public NLImageService::Service {
-    
+  
   Status RotateImage(ServerContext* context, const NLImageRotateRequest* request,
                 NLImage* reply) override {
   
@@ -210,6 +213,8 @@ class NLImageServiceImpl final : public NLImageService::Service {
     return Status::OK;
   }
 };
+
+
 
 void RunServer(string host, string port) {
 

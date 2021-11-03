@@ -50,6 +50,7 @@ using image::NLImageService;
 
 ::image::NLImageRotateRequest_Rotation rotationStringToEnum(string str);
 
+
 class ImageClient {
     
  public:
@@ -76,14 +77,9 @@ class ImageClient {
     NLImageRotateRequest request;
     NLImage* imageToSend = img;
 
-    cout << "about to send: " << imageToSend->data().length();
-
     request.set_rotation(rotationStringToEnum(options.rotate));
     request.set_allocated_image(imageToSend);
 
-    int hh = imageToSend->data().length();
-    cout << "sending bytes" << imageToSend->data().length() << " size here:" << hh << " rotate: " << request.rotation() << endl;
-      
 
     // Container for the data we expect from the server.
     NLImage reply;
@@ -95,14 +91,13 @@ class ImageClient {
     ClientContext context;
 
     // The actual RPC call for rotate.
+    cout << "Calling RotateImage() rpc.." << endl;
     Status status = stub_->RotateImage(&context, request, &reply);
 
     // Act upon its status.
     if (status.ok()) {
-      cout << "Reply: " << endl;
-      cout << "Bytes back:" << reply.data().length() << endl;
-
-      writeReturnFile(reply);
+      cout << "Bytes back from Rotate:" << reply.data().length() << endl;
+      *img = reply;
 
     } else {
       std::cout << status.error_code() << ": " << status.error_message()
@@ -110,16 +105,16 @@ class ImageClient {
       return "RPC failed";
     }
 
-    cout << "stat filter" << endl;
     // The actual RPC call for mean.
     if (options.mean){
       
       ClientContext context2;
+      cout << "Calling MeanFilter() rpc.." << endl;
       status = stub_->MeanFilter(&context2, reply, &filterReply);
 
       if (status.ok()){
         cout << "Bytes back from filter:" << filterReply.data().length() << endl;
-        writeReturnFile(filterReply);
+        *img = reply;
         return "SUCCESS";
       } else {
         std::cout << status.error_code() << ": " << status.error_message()
@@ -142,6 +137,7 @@ class ImageClient {
     int imgHeight = returnImg.height();
     
     int numChannels = returnImg.color() ? 3: 1;
+    
     
     cout << "width: " << imgWidth << " height:" << imgHeight <<endl;
     
@@ -172,10 +168,49 @@ class ImageClient {
     
     cout << "wrote return file: " << pixelResult << endl;
   }
+  
+  void writeImageFile(NLImage *returnImg, string imgFilename) {
+  
+    
+    int imgWidth = returnImg->width();
+    int imgHeight = returnImg->height();
+    
+    int numChannels = returnImg->color() ? 3: 1;
+    
+    cout << "Writing output image.. width: " << imgWidth << " height:" << imgHeight <<endl;
+    
+    ImageSpec postagespec (imgWidth, imgHeight, numChannels, TypeDesc::FLOAT);
+    ROI imgRoi;
+    
+    imgRoi.xbegin = 0;
+    imgRoi.ybegin = 0;
+    imgRoi.zbegin = 0;
+    imgRoi.chbegin = 0;
+    
+    imgRoi.xend = imgWidth;
+    imgRoi.yend = imgHeight;
+    imgRoi.zend = 1;
+    imgRoi.chend = numChannels;
+    
+    ImageBuf outBuf;
+    
+    // set the img buffer ready to operate on
+    outBuf.reset(postagespec);
+    //outBuf.make_writable(true);
+    
+    // set pixels
+    char const *pixels = returnImg->data().c_str();
+    bool pixelResult = outBuf.set_pixels(postagespec.roi(), TypeDesc::UINT8, pixels);
+    
+    pixelResult = outBuf.write(imgFilename);
+    
+  }
 
  private:
   std::unique_ptr<NLImageService::Stub> stub_;
 };
+
+
 
 
 ::image::NLImageRotateRequest_Rotation rotationStringToEnum(string str){
@@ -229,6 +264,9 @@ bool getImageFromFile(string strFile, NLImage* image) {
   return true;
 }
 
+
+
+
 static const string DEFAULT_HOST = "localhost";
 static const string DEFAULT_PORT = "50051";
 
@@ -244,17 +282,14 @@ int main(int argc, char** argv) {
   string endpoint_port = (options.port == "") ? DEFAULT_PORT : options.port;
   string endpoint = options.host + ":" + options.port;
 
-  cout << "end: " << endpoint << endl;
 
   NLImage* img = new NLImage();
-  bool getResult = getImageFromFile("/Users/miguelalvarado/Coding/NeuraLinkTest/NeuraLinkTest/NeuraLinkTest/test_neura.jpeg", img);
+  bool getResult = getImageFromFile(options.input, img);
 
   if (!getResult){
     cout << "Error loading image: " << options.input << endl;
     return -1;
   }
-
-  cout << "getImg: " << getResult << endl;
 
   grpc::ChannelArguments ch_args;
   ch_args.SetMaxReceiveMessageSize(-1);
@@ -265,7 +300,9 @@ int main(int argc, char** argv) {
                             ch_args));
 
   std::string reply = imageClient.SendProcessImage(img, options);
-  std::cout << "Greeter received: " << reply << std::endl;
+  std::cout << "SendProcessImage: " << reply << std::endl;
+  
+  imageClient.writeImageFile(img, options.output);
 
   return 0;
 }
