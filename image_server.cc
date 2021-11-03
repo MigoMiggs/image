@@ -61,8 +61,8 @@ class NLImageServiceImpl final : public NLImageService::Service {
   
     NLImage image = request->image();
 
-    cout << "we got it " << image.data().length() << endl;
-    cout << "Width: " << image.width() << " Height: " << image.height() << endl;
+    cout << "Running RotateImage() with bytes: " << image.data().length() << endl;
+    
 
     return cmdRotate(request, reply);
 
