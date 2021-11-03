@@ -37,13 +37,13 @@ set(CMAKE_CXX_STANDARD 14)
 
 
 include(./cmake/common.cmake)
-include_directories("/usr/local/Cellar/openimageio/2.3.8.0/include")
+include_directories("/usr/local/Cellar/openimageio/2.3.9.1/include")
 include_directories("/usr/local/Cellar/imath/3.1.3/include")
 
 set(CMAKE_CXX_STANDARD 14)
 add_compile_options(-std=c++14)
 
-message( "************`on the wall ${CMAKE_CXX_FLAGS}")
+message( "************ Building Image server and client *************")
 
 # Proto file
 get_filename_component(hw_proto "./protos/image.proto" ABSOLUTE)
@@ -80,9 +80,9 @@ target_link_libraries(hw_grpc_proto
   ${_PROTOBUF_LIBPROTOBUF})
 
 #openimageio lib
-file(GLOB LIBRARIES "/usr/local/Cellar/openimageio/2.3.8.0/lib/*.dylib")
+file(GLOB LIBRARIES "/usr/local/Cellar/openimageio/2.3.9.1/lib/*.dylib")
 
-message( "LIBAAAAAAAAAAAAAAAAAAAAAAAAAA ${LIBRARIES}")
+
 
 # Targets greeter_[async_](client|server)
 foreach(_target
@@ -97,8 +97,3 @@ foreach(_target
 endforeach()
 
 
-message( "*****!!!!!!!!!*******`on the poop wall ${CMAKE_CXX_FLAGS}")
-
-message( "*** ######## ${CMAKE_CXX_STANDARD}")
-
-message("chichis ${hw_proto}")
