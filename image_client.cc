@@ -111,7 +111,7 @@ class ImageClient {
 
       if (status.ok()){
         cout << "Bytes back from filter:" << filterReply.data().length() << endl;
-        writeImageFile(reply, "./returned.jpeg");
+        //writeImageFile(reply, "./returned.jpeg");
         returnImg = reply;
         return "SUCCESS";
       } else {
@@ -228,8 +228,8 @@ bool getImageFromFile(string strFile, NLImage* image) {
   unsigned char* bytesToSend = (unsigned char*) a;
   int sizeToSend = size;
 
-  bool bwrite = imgBuffer.write("./source.jpeg");
-  cout << "wrote source: " << bwrite << endl;
+  //bool bwrite = imgBuffer.write("./source.jpeg");
+  //cout << "wrote source: " << bwrite << endl;
  
   image->set_width(outImgWidth);
   image->set_height(outImgHeight);
