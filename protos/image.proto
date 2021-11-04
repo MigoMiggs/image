@@ -20,6 +20,7 @@ message NLImage {
     bytes data = 2;
     int32 width = 3;
     int32 height = 4;
+    int32 channels = 5;
 }
 
 // A request to rotate an image by some multiple of 90 degrees.

@@ -1,13 +1,26 @@
-//
-//  utils.h
-//  TestingGRPC
-//
-//  Created by Miguel Alvarado on 10/28/21.
-//
+/*
+ *
+ * Author: Miguel A. Alvarado
+ *
+ * Description: Interview problem, utility functions
+ *
+ * Notes: Added channels to the image definition so that PNGs with 4 channels work. There may be a bug with properly persisting
+ * the alpha channel, skipping fix for the sake of time.
+ *
+ * There are some hacks for getting this done but could affect performance, ie: reading part if the image file via a stream, but
+ * then reading again via the Open Image ImgBug API. Ideally only read once. Could also have done proper logging, but did not go there.
+ * Tests would be critical in a real world scanario as well.
+ *
+ * This is my first time doing gRPC, protocol bugs and Open Image IO, so there are likely better ways to do many things. :)
+ *
+ */
+
+
 
 #ifndef utils_h
 #define utils_h
 
+#include <fstream>
 
 using namespace std;
 
@@ -20,6 +33,11 @@ struct cmdLineOptions {
   string output;
 };
 
+/**
+ * showUsage  show usage in cmd line -- this needs love, did the bare minimum
+ *
+ * @return void
+ */
 static void showUsage(){
   
   string client = "  ./client --port <...> --host <...> --input <...> --output <...> --rotate <...> --mean";
@@ -35,6 +53,14 @@ static void showUsage(){
 }
 
 
+
+/**
+ * parseCmdLine  Parse the cmd line -- we could have a much more elegant version, but this will be good for now
+ * @param int fnumber of args
+ * @param char** array of args
+ * @param cmdLineOptions& options to return
+ * @return bool does it seem to be valid
+ */
 static bool parseCmdLine(int argc, char** argv, cmdLineOptions& options) {
   if (argc < 3) {
     cout << "usage" << endl;

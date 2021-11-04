@@ -1,20 +1,20 @@
 /*
  *
- * Copyright 2015 gRPC authors.
+ * Author: Miguel A. Alvarado
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Description: Interview problem, server file.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Notes: Added channels to the image definition so that PNGs with 4 channels work. There may be a bug with properly persisting
+ * the alpha channel, skipping fix for the sake of time.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * There are some hacks for getting this done but could affect performance, ie: reading part if the image file via a stream, but
+ * then reading again via the Open Image ImgBug API. Ideally only read once. Could also have done proper logging, but did not go there.
+ * Tests would be critical in a real world scanario as well.
+ *
+ * This is my first time doing gRPC, protocol bugs and Open Image IO, so there are likely better ways to do many things. :)
  *
  */
+
 
 
 #include <iostream>
@@ -56,6 +56,14 @@ using image::NLImageService;
 // Logic and data behind the server's behavior.
 class NLImageServiceImpl final : public NLImageService::Service {
   
+  /**
+   * RotateImage  Dispatch the rotate image RPC
+   *
+   * @param ServerContext gRPC context
+   * @param NLImageRotateRequest Request data, including img
+   * @param NLImage Img to returnd
+   * @return Status
+   */
   Status RotateImage(ServerContext* context, const NLImageRotateRequest* request,
                 NLImage* reply) override {
   
@@ -68,21 +76,36 @@ class NLImageServiceImpl final : public NLImageService::Service {
 
   }
   
+  /**
+   * MeanFilter  Dispatch the filter image RPC
+   *
+   * @param ServerContext gRPC context
+   * @param NLImageRotateRequest Request data, including img
+   * @param NLImage Img to returnd
+   * @return Status
+   */
   Status MeanFilter(ServerContext* context, const NLImage* request,
                 NLImage* reply) override {
   
-    cout << "we got MEAN " << request->data().length() << endl;
-    cout << "Width: " << request->width() << " Height: " << request->height() << endl;
+    cout << "Running MeanFilter() with bytes:" << request->data().length() << endl;
 
     return cmdMeanFilter(request, reply);
 
   }
   
+  /**
+   * cmdMeanFilter  Do the axctial filter work... used the cmd name because originaly thought of a
+   * command pattern which was overkill for this exercise
+   *
+   * @param NLImage Image in
+   * @param NLImage Image out
+   * @return Status
+   */
   Status cmdMeanFilter(const NLImage* request, NLImage* reply){
     int imgWidth = request->width();
     int imgHeight = request->height();
 
-    int numChannels = request->color() ? 3: 1;
+    int numChannels = request->channels();
     int imgByteSize = request->data().length();
 
     ImageSpec postagespec (imgWidth, imgHeight, numChannels, TypeDesc::UINT8);
@@ -122,25 +145,32 @@ class NLImageServiceImpl final : public NLImageService::Service {
     reply->set_height(imgHeight);
     reply->set_color(request->color());
 
-    cout << "done mean!: " << endl;
-    pixelResult = outBuf.write("./processed_mean.jpeg");
+    cout << "Done mean!: " << endl;
+    //pixelResult = outBuf.write("./processed_mean.jpeg"); <-- was using for debug
 
-    cout << "We are here!! " << pixelResult << endl;
 
     return Status::OK;
   }
   
+  /**
+   * cmdRotate  Do the actual rotate work... used the cmd name because originaly thought of a
+   * command pattern which was overkill for this exercise
+   *
+   * @param NLImage Image in
+   * @param NLImage Image out
+   * @return Status
+   */
   Status cmdRotate(const NLImageRotateRequest* request, NLImage* reply){
-    cout << "let's get to work here" << endl;
 
     NLImage imageRequest = request->image();
 
     int imgWidth = imageRequest.width();
     int imgHeight = imageRequest.height();
 
-    int numChannels = imageRequest.color() ? 3: 1;
+    int numChannels = imageRequest.channels();
     int imgByteSize = imageRequest.data().length();
 
+    // Need to set spec with img metadata
     ImageSpec postagespec (imgWidth, imgHeight, numChannels, TypeDesc::UINT8);
     ROI imgRoi;
 
@@ -160,7 +190,7 @@ class NLImageServiceImpl final : public NLImageService::Service {
     // set the img buffer ready to operate on
     rotateBuf.reset(postagespec);
 
-    // set pixels
+    // set pixels from the passed img
     char const *pixels = imageRequest.data().c_str();
     bool pixelResult = rotateBuf.set_pixels(postagespec.roi(), TypeDesc::UINT8, pixels);
 
@@ -169,7 +199,6 @@ class NLImageServiceImpl final : public NLImageService::Service {
     if (!pixelResult)
       return Status::CANCELLED;
 
-    cout << "about to rotate with: " << rotation << endl;
     
     // Do the rotation
     if (rotation == image::NLImageRotateRequest_Rotation_NONE){
@@ -204,26 +233,33 @@ class NLImageServiceImpl final : public NLImageService::Service {
     reply->set_width(imgWidth);
     reply->set_height(imgHeight);
     reply->set_color(imageRequest.color());
+    reply->set_channels(numChannels);
 
-    cout << "done rot!: " << rotation << endl;
-    pixelResult = outBuf.write("./processed.jpeg");
-
-    cout << "We are here!! " << pixelResult << endl;
+    cout << "done rotate!: " << rotation << endl;
+    // pixelResult = outBuf.write("./processed.jpeg"); <-- was using for debug
     
     return Status::OK;
   }
 };
 
 
-
+/**
+ * RunServer  Start server
+ *
+ * @param string Host ip
+ * @param string Port
+ * @return Status
+ */
 void RunServer(string host, string port) {
 
+  // could use validation on host and port, that can come later
   std::string server_address(host + ":" + port);
     
   NLImageServiceImpl service;
 
   grpc::EnableDefaultHealthCheckService(true);
   grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+  
   ServerBuilder builder;
   // Listen on the given address without any authentication mechanism.
   builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
@@ -231,11 +267,10 @@ void RunServer(string host, string port) {
   // clients. In this case it corresponds to an *synchronous* service.
   builder.RegisterService(&service);
     
-    
+  // make sure we don't run into size problems
   builder.SetMaxMessageSize(0x7FFFFFFF);
   builder.SetMaxMessageSize(-1);
-
-
+  
   // Finally assemble the server.
   std::unique_ptr<Server> server(builder.BuildAndStart());
   std::cout << "Server listening on " << server_address << std::endl;
@@ -245,6 +280,10 @@ void RunServer(string host, string port) {
   server->Wait();
 }
 
+/**
+ * main Entry point
+ *
+ */
 int main(int argc, char** argv) {
   
   cmdLineOptions options;

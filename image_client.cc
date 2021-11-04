@@ -1,18 +1,17 @@
 /*
  *
- * Copyright 2015 gRPC authors.
+ * Author: Miguel A. Alvarado
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Description: Interview problem, client file.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Notes: Added channels to the image definition so that PNGs with 4 channels work. There may be a bug with properly persisting
+ * the alpha channel, skipping fix for the sake of time.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * There are some hacks for getting this done but could affect performance, ie: reading part if the image file via a stream, but
+ * then reading again via the Open Image ImgBug API. Ideally only read once. Could also have done proper logging, but did not go there.
+ * Tests would be critical in a real world scanario as well.
+ *
+ * This is my first time doing gRPC, protocol bugs and Open Image IO, so there are likely better ways to do many things. :)
  *
  */
 
@@ -31,8 +30,6 @@
 
 using namespace OIIO;
 using namespace std;
-
-
 
 #ifdef BAZEL_BUILD
 #include "examples/protos/image.grpc.pb.h"
@@ -71,7 +68,7 @@ class ImageClient {
    * @param cmdLineOptions options for send from command line
    * @return string message to ourput
    */
-  std::string SendProcessImage(NLImage* img, cmdLineOptions options) {
+  std::string SendProcessImage(NLImage* img, cmdLineOptions options, NLImage& returnImg) {
     
     // Data we are sending to the server.
     NLImageRotateRequest request;
@@ -97,7 +94,7 @@ class ImageClient {
     // Act upon its status.
     if (status.ok()) {
       cout << "Bytes back from Rotate:" << reply.data().length() << endl;
-      *img = reply;
+      returnImg = reply;
 
     } else {
       std::cout << status.error_code() << ": " << status.error_message()
@@ -114,7 +111,8 @@ class ImageClient {
 
       if (status.ok()){
         cout << "Bytes back from filter:" << filterReply.data().length() << endl;
-        *img = reply;
+        writeImageFile(reply, "./returned.jpeg");
+        returnImg = reply;
         return "SUCCESS";
       } else {
         std::cout << status.error_code() << ": " << status.error_message()
@@ -129,17 +127,24 @@ class ImageClient {
   }
   
   
+
   
-  void writeReturnFile(NLImage returnImg){
+  /**
+   * writeImageFile  Writes a NLImage objects to disk converting to a ImgBuf,
+   *
+   * @param NLImage Source image
+   * @param String Output filename
+   * @return void
+   */
+  void writeImageFile(NLImage &returnImg, string imgFilename) {
   
     
     int imgWidth = returnImg.width();
     int imgHeight = returnImg.height();
     
-    int numChannels = returnImg.color() ? 3: 1;
+    int numChannels = returnImg.channels();
     
-    
-    cout << "width: " << imgWidth << " height:" << imgHeight <<endl;
+    cout << "Writing output image.. width: " << imgWidth << " height:" << imgHeight <<endl;
     
     ImageSpec postagespec (imgWidth, imgHeight, numChannels, TypeDesc::FLOAT);
     ROI imgRoi;
@@ -164,44 +169,6 @@ class ImageClient {
     char const *pixels = returnImg.data().c_str();
     bool pixelResult = outBuf.set_pixels(postagespec.roi(), TypeDesc::UINT8, pixels);
     
-    pixelResult = outBuf.write("./returned.jpeg");
-    
-    cout << "wrote return file: " << pixelResult << endl;
-  }
-  
-  void writeImageFile(NLImage *returnImg, string imgFilename) {
-  
-    
-    int imgWidth = returnImg->width();
-    int imgHeight = returnImg->height();
-    
-    int numChannels = returnImg->color() ? 3: 1;
-    
-    cout << "Writing output image.. width: " << imgWidth << " height:" << imgHeight <<endl;
-    
-    ImageSpec postagespec (imgWidth, imgHeight, numChannels, TypeDesc::FLOAT);
-    ROI imgRoi;
-    
-    imgRoi.xbegin = 0;
-    imgRoi.ybegin = 0;
-    imgRoi.zbegin = 0;
-    imgRoi.chbegin = 0;
-    
-    imgRoi.xend = imgWidth;
-    imgRoi.yend = imgHeight;
-    imgRoi.zend = 1;
-    imgRoi.chend = numChannels;
-    
-    ImageBuf outBuf;
-    
-    // set the img buffer ready to operate on
-    outBuf.reset(postagespec);
-    //outBuf.make_writable(true);
-    
-    // set pixels
-    char const *pixels = returnImg->data().c_str();
-    bool pixelResult = outBuf.set_pixels(postagespec.roi(), TypeDesc::UINT8, pixels);
-    
     pixelResult = outBuf.write(imgFilename);
     
   }
@@ -211,8 +178,12 @@ class ImageClient {
 };
 
 
-
-
+/**
+ * rotationStringToEnum  Utility function that turns a string into the enum.
+ *
+ * @param str Source image
+ * @return NLImageRotateRequest_Rotation
+ */
 ::image::NLImageRotateRequest_Rotation rotationStringToEnum(string str){
   if (str == "NINETY_DEG") {
     return ::image::NLImageRotateRequest_Rotation_NINETY_DEG;
@@ -225,6 +196,13 @@ class ImageClient {
   }
 }
 
+/**
+ * getImageFromFile  Creates an NLImage object from a file
+ *
+ * @param string Source file
+ * @param NLImage Image to return
+ * @return bool
+ */
 bool getImageFromFile(string strFile, NLImage* image) {
   ImageBuf imgBuffer = ImageBuf(strFile);
   
@@ -236,9 +214,12 @@ bool getImageFromFile(string strFile, NLImage* image) {
   int outImgHeight = spec.height;
   int totalchannels = roi.nchannels();
   
+  cout << "channels: " << totalchannels << endl;
+  
   int size = outImgWidth * outImgHeight * totalchannels;
   unsigned char* a = new unsigned char[size];
 
+  // *** try to copy pixels
   bool pixelResult = imgBuffer.get_pixels(roi, TypeDesc::UINT8, a);
   
   if (!pixelResult)
@@ -249,14 +230,13 @@ bool getImageFromFile(string strFile, NLImage* image) {
 
   bool bwrite = imgBuffer.write("./source.jpeg");
   cout << "wrote source: " << bwrite << endl;
-  
-  // *** try to copy pixels
+ 
   image->set_width(outImgWidth);
   image->set_height(outImgHeight);
+  image->set_channels(totalchannels);
   
-  bool isColor = (totalchannels == 3) ? true: false;
+  bool isColor = (totalchannels > 3) ? true: false;
   image->set_color(isColor);
-  
   image->set_data(bytesToSend, sizeToSend);
 
   delete[] a;
@@ -264,12 +244,52 @@ bool getImageFromFile(string strFile, NLImage* image) {
   return true;
 }
 
+static const unsigned char JPEG_FIRST_BYTE = 0xFF;
+static const unsigned char PNG_FIRST_BYTE = 0x89;
 
+/**
+ * validJpgOrPng  Very light validation, checks the first byte for JPEG and PNG, this could check the entire header and beyond
+ * @param string file name
+ * @return bool does it seem to be valid
+ */
+static bool validJpgOrPng(string fileName){
+ 
+  ifstream ifs(fileName);
+  
+  if (!ifs.good()){
+    return false;
+  }
+  
+  unsigned char firstbyte;
+  
+  string extension = fileName.substr(fileName.find_last_of(".") + 1);
+  firstbyte = ifs.peek();
+  cout << "valid: " << firstbyte << endl;
+  
+  if (extension == "jpeg" || extension == "JPEG"){
+    if (firstbyte != JPEG_FIRST_BYTE)
+      return false;
+    
+  } else if (extension == "png" || extension == ".PNG"){
+    if (firstbyte != PNG_FIRST_BYTE)
+      return false;
+    
+  } else {
+    return false;
+  }
+  
+  return true;
+
+}
 
 
 static const string DEFAULT_HOST = "localhost";
 static const string DEFAULT_PORT = "50051";
 
+/**
+ * main Entry point
+ *
+ */
 int main(int argc, char** argv) {
   
   cmdLineOptions options;
@@ -282,6 +302,13 @@ int main(int argc, char** argv) {
   string endpoint_port = (options.port == "") ? DEFAULT_PORT : options.port;
   string endpoint = options.host + ":" + options.port;
 
+  // make sure image is legit
+  bool validImg = validJpgOrPng(options.input);
+  
+  if (!validImg){
+    cout << "Invalid image file!!" << endl;
+    return -1;
+  }
 
   NLImage* img = new NLImage();
   bool getResult = getImageFromFile(options.input, img);
@@ -293,16 +320,18 @@ int main(int argc, char** argv) {
 
   grpc::ChannelArguments ch_args;
   ch_args.SetMaxReceiveMessageSize(-1);
+  
+  NLImage outputImg;
 
   ImageClient imageClient(
   grpc::CreateCustomChannel(endpoint,
                             grpc::InsecureChannelCredentials(),
                             ch_args));
 
-  std::string reply = imageClient.SendProcessImage(img, options);
+  std::string reply = imageClient.SendProcessImage(img, options, outputImg);
   std::cout << "SendProcessImage: " << reply << std::endl;
   
-  imageClient.writeImageFile(img, options.output);
+  imageClient.writeImageFile(outputImg, options.output);
 
   return 0;
 }
